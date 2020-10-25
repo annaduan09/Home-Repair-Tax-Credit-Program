@@ -113,12 +113,33 @@ Engineer new features that significantly increase the Sensitivity.
 3.Cross validate both models; compare and interpret two facetted plots of ROC, Sensitivity and Specificity.
 
 ```{r Add new features}
-##age groups
+##age groups ##employ or not ##high school and bachelor's or not
+housingsubsidy <- 
+  housingsubsidy %>% 
+  mutate(emply_status = case_when(job == "unemployed"  ~ "unemployed",
+                                   TRUE  ~ "employed"),
+         agegroup = case_when(age >= 18 & age < 35 ~ "Young adult",
+                                   age >= 35 & age < 65  ~ "Middle-aged adult",
+                                   age >= 65  ~ "Old adult"), 
+         degree.group = case_when(education == "high.school" ~ "high school",
+                                   education == "university.degree" ~ "bachelor's",
+                                   education == "unknown" | education == "illiterate" ~ "missing data",
+                                  TRUE ~ "Under high school"))
+```
 
-##employ or not
+```{r regression}
+housingsubsidyModel <- glm(y_numeric ~ .,
+                  data=housingsubsidyTrain %>% 
+                    dplyr::select(-age, -education),
+                  family="binomial" (link="logit"))
 
-#high school and bachelor's or not
+summary(housingsubsidyModel)
 
+pR2(housingsubsidyModel)
+```
+```{r prediction}
+testProbs <- data.frame(Outcome = as.factor(housingsubsidyTest$y_numeric),
+                        Probs = predict(housingsubsidyModel, housingsubsidyTest, type= "response"))
 ```
 
 ## Interpret the ROC curve
