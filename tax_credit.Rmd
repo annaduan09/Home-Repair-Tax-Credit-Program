@@ -53,7 +53,7 @@ Develop and interpret data visualizations that describe feature importance/corre
 
 ```{r Data visualizations, message = FALSE, warning = FALSE}
 housingsubsidy %>%
-  dplyr::select(y,age,job, marital, education,mortgage, contact, month, day_of_week, spent_on_repairs, unemploy_rate, poutcome, previous, campaign, pdays, taxLien, taxbill_in_phl) %>%
+  dplyr::select(y,spent_on_repairs, unemploy_rate, previous, campaign, pdays, cons.price.idx, cons.conf.idx) %>% 
   gather(Variable, value, -y) %>%
     ggplot(aes(y, value, fill=y)) + 
       geom_bar(position = "dodge", stat = "summary", fun.y = "mean") + 
@@ -63,9 +63,9 @@ housingsubsidy %>%
            title = "Feature associations with the likelihood of receiving subsidy",
            subtitle = "(continous outcomes)") +
       theme(legend.position = "none")
-      
+##for continuous variables
 housingsubsidy %>%
-    dplyr::select(y,age,spent_on_repairs,unemploy_rate,campaign) %>%
+    dplyr::select(y, age, spent_on_repairs ,unemploy_rate , campaign, inflation_rate, previous, cons.price.idx, cons.conf.idx) %>%
     gather(Variable, value, -y) %>%
     ggplot() + 
     geom_density(aes(value, color=y), fill = "transparent") + 
@@ -74,6 +74,20 @@ housingsubsidy %>%
     labs(title = "Feature distributions subsidy vs. no subsidy",
          subtitle = "(continous outcomes)") +
     theme(legend.position = "none")
+##for categorical variables
+housingsubsidy %>%
+    dplyr::select(y, taxLien, education, contact, marital, job, mortgage, taxbill_in_phl, month, day_of_week, poutcome) %>%
+    gather(Variable, value, -y) %>%
+    count(Variable, value, y) %>%
+      ggplot(., aes(value, n, fill = y)) +   
+        geom_bar(position = "dodge", stat="identity") +
+        facet_wrap(~Variable, scales="free") +
+        scale_fill_manual(values = palette2) +
+        labs(x="Subsidy yes", y="Value",
+             title = "Feature associations with the likelihood of click",
+             subtitle = "Categorical features") +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 ```
 
 
@@ -81,7 +95,12 @@ housingsubsidy %>%
 Split your data into a 65/35 training/test set.
 
 ```{r Data wrangling}
-summary(cars)
+set.seed(3456)
+trainIndex <- createDataPartition(housingsubsidy$y, p = .65,
+                                  list = FALSE,
+                                  times = 1)
+housingsubsidyTrain <- housingsubsidy[ trainIndex,]
+housingsubsidyTest  <- housingsubsidy[-trainIndex,]
 ```
 
 ## Add new features
@@ -89,11 +108,16 @@ Engineer new features that significantly increase the Sensitivity.
 
 1.Interpret your new features in one paragraph.
 
-2.Show a regression summary for both the kitchen sink and your engineered regression.
+2.Show a regression summary for both the kitchen sink and your engineered regression. #what is a kitchen sink here?
 
 3.Cross validate both models; compare and interpret two facetted plots of ROC, Sensitivity and Specificity.
 
 ```{r Add new features}
+##age groups
+
+##employ or not
+
+#high school and bachelor's or not
 
 ```
 
