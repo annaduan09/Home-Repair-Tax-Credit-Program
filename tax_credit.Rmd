@@ -1,0 +1,133 @@
+---
+title: "Home repair tax credit program"
+author: "Bingchu Chen"
+date: "10/25/2020"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+## Questions
+If we predict that a household will take the credit, then HCD is willing to allocate $2,850 per homeowner which includes staff and resources to facilitate mailers, phone calls, and information/counseling sessions at the HCD offices. Given the new targeting algorithm, we should now assume 25% of contacted eligible homeowners take the credit. The remainder receive the marketing allocation but do not take the credit.
+
+The credit costs $5,000 per homeowner which can be used toward home improvement. Academic researchers in Philadelphia evaluated the program finding that houses that transacted after taking the credit, sold with a $10,000 premium, on average. Homes surrounding the repaired home see an aggregate premium of $56,000, on average. Below is a run down of the costs and benefits for each potential outcome of the model you will build.
+
+True Positive - Predicted correctly homeowner would take the credit; allocated the marketing resources, and 25% took the credit.
+True Negative - Predicted correctly homeowner would not take the credit, no marketing resources were allocated, and no credit was allocated.
+False Positive - Predicted incorrectly homeowner would take the credit; allocated marketing resources; no credit allocated.
+False Negative - We predicted that a homeowner would not take the credit but they did. These are likely homeowners who signed up for reasons unrelated to the marketing campaign. Thus, we '0 out' this category, assuming the cost/benefit of this is $0.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+```{r load_packages, warning = FALSE}
+options(scipen=10000000)
+
+library(tidyverse)
+library(kableExtra)
+library(caret)
+library(knitr) 
+library(pscl)
+library(plotROC)
+library(pROC)
+library(lubridate)
+library(viridis)
+```
+
+```{r load_data, cache = TRUE}
+palette5 <- c("#d24ae8","#f0b660","#981FAC","#f5614e","#00bafe")
+palette4 <- c("#d24ae8","#f0b660","#981FAC","#f5614e")
+palette2 <- c("#d24ae8","#f0b660")
+
+
+housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv")
+```
+
+## Motivation
+One paragraph on the motivation for the analysis.
+
+## Data visualizations
+Develop and interpret data visualizations that describe feature importance/correlation.
+
+```{r Data visualizations, message = FALSE, warning = FALSE}
+housingsubsidy %>%
+  dplyr::select(y,age,job, marital, education,mortgage, contact, month, day_of_week, spent_on_repairs, unemploy_rate, poutcome, previous, campaign, pdays, taxLien, taxbill_in_phl) %>%
+  gather(Variable, value, -y) %>%
+    ggplot(aes(y, value, fill=y)) + 
+      geom_bar(position = "dodge", stat = "summary", fun.y = "mean") + 
+      facet_wrap(~Variable, scales = "free") +
+      scale_color_viridis(option = "D")+
+      labs(x="Churn", y="Value", 
+           title = "Feature associations with the likelihood of receiving subsidy",
+           subtitle = "(continous outcomes)") +
+      theme(legend.position = "none")
+      
+housingsubsidy %>%
+    dplyr::select(y,age,spent_on_repairs,unemploy_rate,campaign) %>%
+    gather(Variable, value, -y) %>%
+    ggplot() + 
+    geom_density(aes(value, color=y), fill = "transparent") + 
+    facet_wrap(~Variable, scales = "free") +
+    scale_fill_manual(values = palette2) +
+    labs(title = "Feature distributions subsidy vs. no subsidy",
+         subtitle = "(continous outcomes)") +
+    theme(legend.position = "none")
+```
+
+
+## Data wrangling
+Split your data into a 65/35 training/test set.
+
+```{r Data wrangling}
+summary(cars)
+```
+
+## Add new features
+Engineer new features that significantly increase the Sensitivity.
+
+1.Interpret your new features in one paragraph.
+
+2.Show a regression summary for both the kitchen sink and your engineered regression.
+
+3.Cross validate both models; compare and interpret two facetted plots of ROC, Sensitivity and Specificity.
+
+```{r Add new features}
+
+```
+
+## Interpret the ROC curve
+Output an ROC curve for your new model and interpret it.
+```{r ROC curve , echo=FALSE}
+
+```
+
+## Cost benefit analysis
+1.Write out the cost/benefit equation for each confusion metric.
+2.Create the 'Cost/Benefit Table' as seen above.
+
+```{r Cost/Benefit Table}
+
+```
+
+3.Plot the confusion metric outcomes for each Threshold.
+
+```{r Plot the confusion metric}
+
+```
+
+4.Create two small multiple plots that show Threshold as a function of Total_Revenue and Total_Count_of_Credits. Interpret this.
+
+```{r two small multiple plots}
+
+```
+
+5.Create a table of the Total_Revenue and Total_Count_of_Credits allocated for 2 categories. 50%_Threshold and your Optimal_Threshold.
+
+```{r Create a table}
+
+```
+
+## Conclusions
+Conclude whether and why this model should or shouldn't be put into production. What could make the model better? What would you do to ensure that the marketing materials resulted in a better response rate?
