@@ -1,0 +1,52 @@
+---
+title: "Home Subsidy Algorithm"
+author: "Anna Duan"
+date: "10/23/2020"
+output: html_document
+---
+
+---
+  title: "Home Repair Tax Credit Program"
+author: "Anna Duan"
+date: "10/24/2020"
+output: 
+  html_document: 
+  code_folding: hide
+toc: true
+toc float: true
+number_sections: false
+---
+
+## Introduction
+Motivations for analysis
+
+```{r 1: Develop and interpret data viz describing feature importance and correlation}
+```
+
+```{r 2: Split data into 65/35 training/test set}
+```
+
+```{r 3: engineer features that increase sensitivity (true positive rate)}
+```
+
+```{r 4: interpret features in 1 paragraph}
+```
+
+```{r 5: regression summary for kitchen sink & engineered regression}
+```
+
+```{r 6: cross validate both models, compare and interpret 2 facet plots of ROC, sensitivity, specificity}
+```
+
+```{r 7: ROC curve for new model + interpret}
+```
+
+```{r 8: Cost benefit analysis}
+```
+
+```{requation for each confusion metric
+cost benefit table
+plot confusion metric outcomes for each threshold
+2 small multiple plots showing threshold as function of total revenue and total count of credits
+table of total revenue and total count of credits for 2 categories: 50% threshold and your optimal threshold
+Conclusion: should this model be used? How can it be improved? How to make marketing materials result in better response rate?
