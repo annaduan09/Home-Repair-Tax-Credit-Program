@@ -1,6 +1,6 @@
 ---
 title: "Home repair tax credit program"
-author: "Bingchu Chen"
+author: "Bingchu Chen, Anna Duan"
 date: "10/25/2020"
 output:
   html_document:
@@ -41,8 +41,15 @@ palette5 <- c("#d24ae8","#f0b660","#981FAC","#f5614e","#00bafe")
 palette4 <- c("#d24ae8","#f0b660","#981FAC","#f5614e")
 palette2 <- c("#d24ae8","#f0b660")
 
+root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 
-housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv")
+#housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv")
+housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
+  rename(tookSubsidyNum = y_numeric,
+         prevMktgOutcome = poutcome,
+         tookSubsidy = y)
+  
 ```
 
 ## Motivation
@@ -52,63 +59,75 @@ One paragraph on the motivation for the analysis.
 Develop and interpret data visualizations that describe feature importance/correlation.
 
 ```{r Data visualizations, message = FALSE, warning = FALSE}
+#Continuous variables
 housingsubsidy %>%
-  dplyr::select(y,spent_on_repairs, unemploy_rate, previous, campaign, pdays, cons.price.idx, cons.conf.idx) %>% 
-  gather(Variable, value, -y) %>%
-    ggplot(aes(y, value, fill=y)) + 
-      geom_bar(position = "dodge", stat = "summary", fun.y = "mean") + 
+  dplyr::select(tookSubsidy, age, campaign, pdays, previous, spent_on_repairs, unemploy_rate, cons.price.idx, cons.conf.idx, inflation_rate) %>% 
+  gather(Variable, value, -tookSubsidy) %>%
+    ggplot(aes(tookSubsidy, value, fill=tookSubsidy)) + 
+      geom_bar(position = "dodge", stat = "summary", fun = "mean") + 
       facet_wrap(~Variable, scales = "free") +
       scale_color_viridis(option = "D")+
-      labs(x="Churn", y="Value", 
-           title = "Feature associations with the likelihood of receiving subsidy",
+      labs(x="Accepted Subsidy", y="Mean", 
+           title = "Feature Associations with Likelihood of Accepting Subsidy",
            subtitle = "(continous outcomes)") +
       theme(legend.position = "none")
+
+
+#yes/no variables
+housingsubsidy %>%
+  dplyr::select(tookSubsidy, mortgage, taxbill_in_phl) %>%
+  gather(Variable, value, -tookSubsidy) %>%
+  count(Variable, value, tookSubsidy) %>%
+  filter(value == "yes") %>%
+    ggplot(aes(tookSubsidy, n, fill = tookSubsidy)) +   
+      geom_bar(position = "dodge", stat="identity") +
+      facet_wrap(~Variable, scales = "free", ncol=2) +
+      scale_fill_viridis(discrete = "TRUE", option = "B") +
+      labs(x="Accepted Subsidy", y="Count",
+           title = "Feature associations with the likelihood of accepting subsidy",
+           subtitle = "Two category features (Yes and No)") +
+      plotTheme() + theme(legend.position = "none")
+
+#more than 2 categories
+housingsubsidy %>%
+  dplyr::select(tookSubsidy, job, marital, education, contact, month, day_of_week, prevMktgOutcome, ) %>%
+  gather(Variable, value, -tookSubsidy) %>%
+  count(Variable, value, tookSubsidy) %>%
+  ggplot(aes(value, n, fill = tookSubsidy)) +   
+    geom_bar(position = "dodge", stat="identity") +
+    facet_wrap(~Variable, scales="free", ncol=2) +
+    scale_fill_manual(values = palette2) +
+    labs(x="Accepted Subsidy", y="Count",
+         title = "Feature associations with the likelihood of accepting subsidy",
+         subtitle = "Multiple category features") +
+    plotTheme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
 ##for continuous variables
 housingsubsidy %>%
-    dplyr::select(y, age, spent_on_repairs ,unemploy_rate , campaign, inflation_rate, previous, cons.price.idx, cons.conf.idx) %>%
-    gather(Variable, value, -y) %>%
+    dplyr::select(tookSubsidy, age, spent_on_repairs ,unemploy_rate , campaign, inflation_rate, previous, cons.price.idx, cons.conf.idx) %>%
+    gather(Variable, value, -tookSubsidy) %>%
     ggplot() + 
-    geom_density(aes(value, color=y), fill = "transparent") + 
+    geom_density(aes(value, color=tookSubsidy), fill = "transparent") + 
     facet_wrap(~Variable, scales = "free") +
     scale_fill_manual(values = palette2) +
     labs(title = "Feature distributions subsidy vs. no subsidy",
-         subtitle = "(continous outcomes)") +
+         subtitle = "(continous outcomes)", x = "Value", y = "Density") +
     theme(legend.position = "none")
-##for categorical variables
-housingsubsidy %>%
-    dplyr::select(y, taxLien, education, contact, marital, job, mortgage, taxbill_in_phl, month, day_of_week, poutcome) %>%
-    gather(Variable, value, -y) %>%
-    count(Variable, value, y) %>%
-      ggplot(., aes(value, n, fill = y)) +   
-        geom_bar(position = "dodge", stat="identity") +
-        facet_wrap(~Variable, scales="free") +
-        scale_fill_manual(values = palette2) +
-        labs(x="Subsidy yes", y="Value",
-             title = "Feature associations with the likelihood of click",
-             subtitle = "Categorical features") +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 
 ```
 
 
 ## Data wrangling
-Split your data into a 65/35 training/test set.
-
-```{r Data wrangling}
-set.seed(3456)
-trainIndex <- createDataPartition(housingsubsidy$y, p = .65,
-                                  list = FALSE,
-                                  times = 1)
-housingsubsidyTrain <- housingsubsidy[ trainIndex,]
-housingsubsidyTest  <- housingsubsidy[-trainIndex,]
-```
 
 ## Add new features
 Engineer new features that significantly increase the Sensitivity.
 
 1.Interpret your new features in one paragraph.
 
-2.Show a regression summary for both the kitchen sink and your engineered regression. #what is a kitchen sink here?
+2.Show a regression summary for both the kitchen sink and your engineered regression. #what is a kitchen sink here? AD: I think it's just an expression meaning everything/random assortment of features
 
 3.Cross validate both models; compare and interpret two facetted plots of ROC, Sensitivity and Specificity.
 
@@ -116,36 +135,125 @@ Engineer new features that significantly increase the Sensitivity.
 ##age groups ##employ or not ##high school and bachelor's or not
 housingsubsidy <- 
   housingsubsidy %>% 
-  mutate(emply_status = case_when(job == "unemployed"  ~ "unemployed",
+  mutate(employStatus = case_when(job == "unemployed"  ~ "unemployed",
+                                   job == "retired" ~ "retired",
+                                  job == "student" ~ "student",
                                    TRUE  ~ "employed"),
-         agegroup = case_when(age >= 18 & age < 35 ~ "Young adult",
+         ageGroup = case_when(age >= 18 & age < 35 ~ "Young adult",
                                    age >= 35 & age < 65  ~ "Middle-aged adult",
                                    age >= 65  ~ "Old adult"), 
-         degree.group = case_when(education == "high.school" ~ "high school",
+         degreeGroup = case_when(education == "high.school" ~ "high school",
                                    education == "university.degree" ~ "bachelor's",
-                                   education == "unknown" | education == "illiterate" ~ "missing data",
-                                  TRUE ~ "Under high school"))
+                                   education == "unknown" ~ "unknown",
+                                  education == "illiterate" ~ "illiterate",
+                                  TRUE ~ "Below high school"),
+         industry = case_when(job == "blue-collar" | job == "technician" ~ "blue collar",
+                              job == "services" | job == "housemaid" ~ "services",
+                              job == "entrepreneur" | job == "self-employed" ~ "entrepreneur",
+                              job == "admin." | job == "management" ~ "white collar",
+                              TRUE ~ "Unknown"),
+         lastContact = case_when(pdays == 999 ~ "never contacted",
+                                 pdays < 7 ~ "Past week",
+                                 pdays >= 7 & pdays < 14 ~ "1-2 Weeks",
+                                 pdays >= 14 & pdays < 21 ~ "2-3 Weeks",
+                               TRUE ~ "More than 3 Weeks"),
+         contactedBefore = case_when(previous == 0 ~ "no",
+                                  TRUE ~ "yes"))
 ```
+
+
+Split your data into a 65/35 training/test set.
+
+```{r Data wrangling}
+set.seed(3456)
+trainIndex <- createDataPartition(housingsubsidy$tookSubsidy, 
+                                  y = paste(housingsubsidy$taxLien, housingsubsidy$degreeGroup, housingsubsidy$lastContact),
+                                  p = .65,
+                                  list = FALSE,
+                                  times = 1)
+housingsubsidyTrain <- housingsubsidy[ trainIndex,]
+housingsubsidyTest  <- housingsubsidy[-trainIndex,]
+```
+
+
 
 ```{r regression}
-housingsubsidyModel <- glm(y_numeric ~ .,
+reg1 <- glm(tookSubsidyNum ~ .,
                   data=housingsubsidyTrain %>% 
-                    dplyr::select(-age, -education),
+                    dplyr::select(-employStatus, -ageGroup, -degreeGroup, -industry, -lastContact, -contactedBefore),
                   family="binomial" (link="logit"))
 
-summary(housingsubsidyModel)
 
-pR2(housingsubsidyModel)
+
+#with engineereed features
+reg2 <- glm(tookSubsidyNum ~ .,
+                  data=housingsubsidyTrain %>% 
+                    dplyr::select(-age, -job, -education, -pdays, -previous),
+                  family="binomial" (link="logit"))
+
+
 ```
-```{r prediction}
-testProbs <- data.frame(Outcome = as.factor(housingsubsidyTest$y_numeric),
-                        Probs = predict(housingsubsidyModel, housingsubsidyTest, type= "response"))
+
+
+```{r goodness of fit}
+pR2(reg1)
+pR2(reg2)
+testProbs <- data.frame(Outcome = as.factor(housingsubsidyTest$tookSubsidyNum),
+                        Probs = predict(reg2, housingsubsidyTest, type= "response"))
+testProbs <- 
+  testProbs %>%
+  mutate(predOutcome  = as.factor(ifelse(testProbs$Probs > 0.5 , 1, 0)))
+
+head(testProbs)
+
+ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doesn't look right..
+  geom_density() +
+  facet_grid(Outcome ~ .) +
+  scale_fill_manual(values = palette2) + xlim(0, 1) +
+  labs(x = "Accepted Subsidy", y = "Density of probabilities",
+       title = "Distribution of predicted probabilities by observed outcome") +
+  plotTheme() + theme(strip.text.x = element_text(size = 18),
+        legend.position = "none")
+
+#confusion matrix
+caret::confusionMatrix(testProbs$predOutcome, testProbs$Outcome, 
+                       positive = "1")
+
 ```
 
 ## Interpret the ROC curve
 Output an ROC curve for your new model and interpret it.
 ```{r ROC curve , echo=FALSE}
+ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
+  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
+  style_roc(theme = theme_grey) +
+  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
+  labs(title = "ROC Curve - reg2")
 
+#area under curve 
+pROC::auc(testProbs$Outcome, testProbs$Probs) #not good, overfit
+```
+
+```{r cross validation}
+ctrl <- trainControl(method = "cv", number = 100, classProbs=TRUE, summaryFunction=twoClassSummary)
+
+cvFit <- train(tookSubsidy ~ ., data = housingsubsidy %>% 
+                                   dplyr::select(
+                                   -tookSubsidyNum), 
+                method="glm", family="binomial",
+                metric="ROC", trControl = ctrl)
+
+dplyr::select(cvFit$resample, -Resample) %>%
+  gather(metric, value) %>%
+  left_join(gather(cvFit$results[2:4], metric, mean)) %>%
+  ggplot(aes(value)) + 
+    geom_histogram(bins=35, fill = "#FF006A") +
+    facet_wrap(~metric) +
+    geom_vline(aes(xintercept = mean), colour = "#981FAC", linetype = 3, size = 1.5) +
+    scale_x_continuous(limits = c(0, 1)) +
+    labs(x="Goodness of Fit", y="Count", title="CV Goodness of Fit Metrics",
+         subtitle = "Across-fold mean reprented as dotted lines") +
+    plotTheme()
 ```
 
 ## Cost benefit analysis
@@ -153,18 +261,153 @@ Output an ROC curve for your new model and interpret it.
 2.Create the 'Cost/Benefit Table' as seen above.
 
 ```{r Cost/Benefit Table}
+cost_benefit_table <-
+   testProbs %>%
+      count(predOutcome, Outcome) %>%
+      summarize(True_Negative = sum(n[predOutcome==0 & Outcome==0]),
+                True_Positive = sum(n[predOutcome==1 & Outcome==1]),
+                False_Negative = sum(n[predOutcome==0 & Outcome==1]),
+                False_Positive = sum(n[predOutcome==1 & Outcome==0])) %>%
+       gather(Variable, Count) %>%
+       mutate(Revenue =
+               case_when(Variable == "True_Negative"  ~ Count * 65000,  #AD: not sure about this section, can you double check? 
+                         Variable == "True_Positive"  ~ ((65000 - 7850) * (Count * .25)) + 
+                                                        (-72850 * (Count * .25)),
+                         Variable == "False_Negative" ~ (-65000) * Count,
+                         Variable == "False_Positive" ~ (65000 - 7850) * Count)) %>%
+    bind_cols(data.frame(Description = c(
+              "We predicted no churn and did not send a mailer",
+              "We predicted churn and sent the mailer",
+              "We predicted no churn and the customer churned",
+              "We predicted churn and the customer did not churn")))
 
+kable(cost_benefit_table) %>% 
+  kable_styling(font_size = 12, full_width = F,    #AD: also seems wrong
+                bootstrap_options = c("striped", "hover", "condensed")) %>%
+  footnote(general_title = "\n",
+           general = "Table XX")
 ```
 
 3.Plot the confusion metric outcomes for each Threshold.
 
 ```{r Plot the confusion metric}
+#test thresholds
+iterateThresholds <- function(data, observedClass, predictedProbs, group) {
+  observedClass <- enquo(observedClass)
+  predictedProbs <- enquo(predictedProbs)
+  group <- enquo(group)
+  x = .01
+  all_prediction <- data.frame()
+  
+  if (missing(group)) {
+  
+    while (x <= 1) {
+    this_prediction <- data.frame()
+    
+    this_prediction <-
+      data %>%
+      mutate(predclass = ifelse(!!predictedProbs > x, 1,0)) %>%
+      count(predclass, !!observedClass) %>%
+      summarize(Count_TN = sum(n[predclass==0 & !!observedClass==0]),
+                Count_TP = sum(n[predclass==1 & !!observedClass==1]),
+                Count_FN = sum(n[predclass==0 & !!observedClass==1]),
+                Count_FP = sum(n[predclass==1 & !!observedClass==0]),
+                Rate_TP = Count_TP / (Count_TP + Count_FN),
+                Rate_FP = Count_FP / (Count_FP + Count_TN),
+                Rate_FN = Count_FN / (Count_FN + Count_TP),
+                Rate_TN = Count_TN / (Count_TN + Count_FP),
+                Accuracy = (Count_TP + Count_TN) / 
+                           (Count_TP + Count_TN + Count_FN + Count_FP)) %>%
+      mutate(Threshold = round(x,2))
+    
+    all_prediction <- rbind(all_prediction,this_prediction)
+    x <- x + .01
+  }
+  return(all_prediction)
+  }
+  else if (!missing(group)) { 
+   while (x <= 1) {
+    this_prediction <- data.frame()
+    
+    this_prediction <-
+      data %>%
+      mutate(predclass = ifelse(!!predictedProbs > x, 1,0)) %>%
+      group_by(!!group) %>%
+      count(predclass, !!observedClass) %>%
+      summarize(Count_TN = sum(n[predclass==0 & !!observedClass==0]),
+                Count_TP = sum(n[predclass==1 & !!observedClass==1]),
+                Count_FN = sum(n[predclass==0 & !!observedClass==1]),
+                Count_FP = sum(n[predclass==1 & !!observedClass==0]),
+                Rate_TP = Count_TP / (Count_TP + Count_FN),
+                Rate_FP = Count_FP / (Count_FP + Count_TN),
+                Rate_FN = Count_FN / (Count_FN + Count_TP),
+                Rate_TN = Count_TN / (Count_TN + Count_FP),
+                Accuracy = (Count_TP + Count_TN) / 
+                           (Count_TP + Count_TN + Count_FN + Count_FP)) %>%
+      mutate(Threshold = round(x,2))
+    
+    all_prediction <- rbind(all_prediction,this_prediction)
+    x <- x + .01
+  }
+  return(all_prediction)
+  }
+}
 
+whichThreshold <- 
+  iterateThresholds(
+     data=testProbs, observedClass = Outcome, predictedProbs = Probs)
+
+whichThreshold[1:5,]
+
+#calculate revenue at each threeshold
+whichThreshold <- 
+  whichThreshold %>%
+    dplyr::select(starts_with("Count"), Threshold) %>%
+    gather(Variable, Count, -Threshold) %>%
+    mutate(Revenue =
+                 case_when(Variable == "Count_TN"  ~ Count * 65000,
+                           Variable == "Count_TP"  ~ ((65000 - 7850) * (Count * .25)) + 
+                                                          (-72850 * (Count * .25)),
+                           Variable == "Count_FN"  ~ (-65000) * Count,
+                           Variable == "Count_FP"  ~ (65000 - 7850) * Count))
+
+#plot
+whichThreshold %>%
+  ggplot(.,aes(Threshold, Revenue, colour = Variable)) +
+  geom_point() +
+  scale_colour_manual(values = palette5[c(5, 1:3)]) +    
+  labs(title = "Profit by confusion matrix type and threshold",
+       y = "Profit") +
+  plotTheme() +
+  guides(colour=guide_legend(title = "Confusion Matrix")) 
+
+whichThreshold_revenue <- 
+  whichThreshold %>% 
+    mutate(actualChurn = ifelse(Variable == "Count_TP", (Count * .5),
+                         ifelse(Variable == "Count_FN", Count, 0))) %>% 
+    group_by(Threshold) %>% 
+    summarize(Revenue = sum(Revenue),
+              Actual_Churn_Rate = sum(actualChurn) / sum(Count),
+              Actual_Churn_Revenue_Loss =  sum(actualChurn * 30),
+              Revenue_Next_Period = Revenue - Actual_Churn_Revenue_Loss) 
+
+whichThreshold_revenue[1:5,]
 ```
 
 4.Create two small multiple plots that show Threshold as a function of Total_Revenue and Total_Count_of_Credits. Interpret this.
 
 ```{r two small multiple plots}
+#AD: doesn't work yet
+whichThreshold_revenue %>%
+  dplyr::select(Threshold, Revenue, Revenue_Next_Period) %>%
+  gather(Variable, Value, -Threshold) %>%
+  ggplot(aes(Threshold, Value, colour = Variable)) +
+    geom_point() +
+    geom_vline(xintercept = pull(arrange(whichThreshold_revenue, -Revenue)[1,1])) +
+    scale_colour_manual(values = palette2) +
+    plotTheme() + ylim(0,70000) +
+    labs(title = "Revenue this pay period and the next by threshold",
+         subtitle = "Assuming no new customers added next period. Vertical line denotes optimal threshold")
 
 ```
 
