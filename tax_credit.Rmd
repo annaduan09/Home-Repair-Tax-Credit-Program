@@ -44,8 +44,8 @@ palette2 <- c("#d24ae8","#f0b660")
 root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 
-#housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv")
-housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
+housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
+#housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
   rename(tookSubsidyNum = y_numeric,
          prevMktgOutcome = poutcome,
          tookSubsidy = y)
@@ -178,35 +178,57 @@ housingsubsidyTest  <- housingsubsidy[-trainIndex,]
 
 
 ```{r regression}
+#include all to see the coefficients
+reg0 <- glm(tookSubsidyNum ~ .,
+                  data=housingsubsidyTrain %>% 
+                    dplyr::select(-X, -tookSubsidy, -industry, -degreeGroup, -employStatus,-contactedBefore), #delete all the NAs?
+                  family="binomial" (link="logit"))
+
+summary(reg0)
+pR2(reg0)
+
+#without engineered features
 reg1 <- glm(tookSubsidyNum ~ .,
                   data=housingsubsidyTrain %>% 
-                    dplyr::select(-employStatus, -ageGroup, -degreeGroup, -industry, -lastContact, -contactedBefore),
+                    dplyr::select(-employStatus, -ageGroup, -degreeGroup, -industry, -lastContact, -contactedBefore, -X, -tookSubsidy),
                   family="binomial" (link="logit"))
 
+summary(reg1)
+pR2(reg1)
 
-
-#with engineereed features
+#with engineered features
 reg2 <- glm(tookSubsidyNum ~ .,
                   data=housingsubsidyTrain %>% 
-                    dplyr::select(-age, -job, -education, -pdays, -previous),
+                    dplyr::select(-age, -job, -education, -pdays, -previous, -X, -tookSubsidy),
                   family="binomial" (link="logit"))
 
+summary(reg2)
+pR2(reg2)
+
+#BC: we need to exclude X and tookSubsidy here to avoid overfitting
+
+#with variables that explain the most based on reg1 and reg2
+reg3 <- glm(tookSubsidyNum ~ .,
+                  data=housingsubsidyTrain %>% 
+                    dplyr::select(-X, -tookSubsidy, -industry, -degreeGroup, -employStatus,-contactedBefore, -taxLien),
+                  family="binomial" (link="logit"))
+
+summary(reg3)
+pR2(reg3)
 
 ```
 
 
 ```{r goodness of fit}
-pR2(reg1)
-pR2(reg2)
 testProbs <- data.frame(Outcome = as.factor(housingsubsidyTest$tookSubsidyNum),
-                        Probs = predict(reg2, housingsubsidyTest, type= "response"))
+                        Probs = predict(reg0, housingsubsidyTest, type= "response"))
 testProbs <- 
   testProbs %>%
-  mutate(predOutcome  = as.factor(ifelse(testProbs$Probs > 0.5 , 1, 0)))
+  mutate(predOutcome  = as.factor(ifelse(testProbs$Probs > 0.5 , 1, 0))) #change from 0.5 to raise sensitivity 
 
 head(testProbs)
 
-ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doesn't look right..
+ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doesn't look right.. #BC: it's looking normal now but our sensitivity is so low
   geom_density() +
   facet_grid(Outcome ~ .) +
   scale_fill_manual(values = palette2) + xlim(0, 1) +
@@ -225,13 +247,15 @@ caret::confusionMatrix(testProbs$predOutcome, testProbs$Outcome,
 Output an ROC curve for your new model and interpret it.
 ```{r ROC curve , echo=FALSE}
 ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
-  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +
+  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +  #BC: not sure if we need to change 50 here too
   style_roc(theme = theme_grey) +
   geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
-  labs(title = "ROC Curve - reg2")
+  labs(title = "ROC Curve - reg0")
 
 #area under curve 
-pROC::auc(testProbs$Outcome, testProbs$Probs) #not good, overfit
+pROC::auc(testProbs$Outcome, testProbs$Probs) 
+#0.7538
+#we choose point false positive 0.91?
 ```
 
 ```{r cross validation}
@@ -260,6 +284,9 @@ dplyr::select(cvFit$resample, -Resample) %>%
 1.Write out the cost/benefit equation for each confusion metric.
 2.Create the 'Cost/Benefit Table' as seen above.
 
+If we predict that a household will take the credit, then HCD is willing to allocate $2,850 per homeowner which includes staff and resources to facilitate mailers, phone calls, and information/counseling sessions at the HCD offices. Given the new targeting algorithm, we should now assume 25% of contacted eligible homeowners take the credit. The remainder receive the marketing allocation but do not take the credit.
+
+The credit costs $5,000 per homeowner which can be used toward home improvement. Academic researchers in Philadelphia evaluated the program finding that houses that transacted after taking the credit, sold with a $10,000 premium, on average. Homes surrounding the repaired home see an aggregate premium of $56,000, on average. Below is a run down of the costs and benefits for each potential outcome of the model you will build.
 ```{r Cost/Benefit Table}
 cost_benefit_table <-
    testProbs %>%
@@ -270,16 +297,15 @@ cost_benefit_table <-
                 False_Positive = sum(n[predOutcome==1 & Outcome==0])) %>%
        gather(Variable, Count) %>%
        mutate(Revenue =
-               case_when(Variable == "True_Negative"  ~ Count * 65000,  #AD: not sure about this section, can you double check? 
-                         Variable == "True_Positive"  ~ ((65000 - 7850) * (Count * .25)) + 
-                                                        (-72850 * (Count * .25)),
-                         Variable == "False_Negative" ~ (-65000) * Count,
-                         Variable == "False_Positive" ~ (65000 - 7850) * Count)) %>%
+               case_when(Variable == "True_Negative"  ~ 0,  #AD: not sure about this section, can you double check? #BC: I think we reaaly need a meeting to discuss this, I think the premium only applies to those who accept the credits
+                         Variable == "True_Positive"  ~ 0.25*Count*(56000+10000)-(Count*2850+0.25*Count*5000),
+                         Variable == "False_Negative" ~ Count*(56000+10000)-(5000 * Count),
+                         Variable == "False_Positive" ~ (-2850)*Count)) %>%
     bind_cols(data.frame(Description = c(
-              "We predicted no churn and did not send a mailer",
-              "We predicted churn and sent the mailer",
-              "We predicted no churn and the customer churned",
-              "We predicted churn and the customer did not churn")))
+              "Predicted correctly homeowner would not take the credit, no marketing resources were allocated, and no credit was allocated.",
+              "Predicted correctly homeowner would take the credit; allocated the marketing resources, and 25% took the credit.",
+              "We predicted that a homeowner would not take the credit but they did. These are likely homeowners who signed up for reasons unrelated to the marketing campaign. Thus, we '0 out' this category, assuming the cost/benefit of this is $0.",
+              "Predicted incorrectly homeowner would take the credit; allocated marketing resources; no credit allocated.")))
 
 kable(cost_benefit_table) %>% 
   kable_styling(font_size = 12, full_width = F,    #AD: also seems wrong
@@ -359,18 +385,16 @@ whichThreshold <-
 
 whichThreshold[1:5,]
 
-#calculate revenue at each threeshold
+#calculate revenue at each threshold
 whichThreshold <- 
   whichThreshold %>%
     dplyr::select(starts_with("Count"), Threshold) %>%
     gather(Variable, Count, -Threshold) %>%
     mutate(Revenue =
-                 case_when(Variable == "Count_TN"  ~ Count * 65000,
-                           Variable == "Count_TP"  ~ ((65000 - 7850) * (Count * .25)) + 
-                                                          (-72850 * (Count * .25)),
-                           Variable == "Count_FN"  ~ (-65000) * Count,
-                           Variable == "Count_FP"  ~ (65000 - 7850) * Count))
-
+                 case_when(Variable == "Count_TN"  ~ 0,
+                           Variable == "Count_TP"  ~ 0.25*Count*(56000+10000)-(Count*2850+0.25*Count*5000),
+                           Variable == "Count_FN"  ~ Count*(56000+10000)-(5000 * Count),
+                           Variable == "Count_FP"  ~ (-2850)*Count))
 #plot
 whichThreshold %>%
   ggplot(.,aes(Threshold, Revenue, colour = Variable)) +
@@ -383,15 +407,17 @@ whichThreshold %>%
 
 whichThreshold_revenue <- 
   whichThreshold %>% 
-    mutate(actualChurn = ifelse(Variable == "Count_TP", (Count * .5),
+    mutate(actualChurn = ifelse(Variable == "Count_TP", (Count * .75),
                          ifelse(Variable == "Count_FN", Count, 0))) %>% 
     group_by(Threshold) %>% 
     summarize(Revenue = sum(Revenue),
               Actual_Churn_Rate = sum(actualChurn) / sum(Count),
-              Actual_Churn_Revenue_Loss =  sum(actualChurn * 30),
+              Actual_Churn_Revenue_Loss =  sum(actualChurn * 66000), #NOT SURE
               Revenue_Next_Period = Revenue - Actual_Churn_Revenue_Loss) 
 
 whichThreshold_revenue[1:5,]
+
+maxrevenueTest <- whichThreshold_revenue[,1:2] #something is going wrong 
 ```
 
 4.Create two small multiple plots that show Threshold as a function of Total_Revenue and Total_Count_of_Credits. Interpret this.
@@ -414,7 +440,12 @@ whichThreshold_revenue %>%
 5.Create a table of the Total_Revenue and Total_Count_of_Credits allocated for 2 categories. 50%_Threshold and your Optimal_Threshold.
 
 ```{r Create a table}
-
+threshold_table <- whichThreshold_revenue[c(1,50,), c("Threshold", "Revenue", "Revenue_Next_Period")]
+threshold_table %>%
+  group_by(Thresholdn) %>% 
+  kable(caption = "Total_Revenue and Total_Count_of_Credits") %>%
+    kable_styling("striped", full_width = F) 
+#not finishes, need nopredictive data and best threshold data
 ```
 
 ## Conclusions
