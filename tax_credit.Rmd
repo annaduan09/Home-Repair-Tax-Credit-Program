@@ -34,6 +34,7 @@ library(plotROC)
 library(pROC)
 library(lubridate)
 library(viridis)
+library(gridExtra)
 ```
 
 ```{r load_data, cache = TRUE}
@@ -44,8 +45,8 @@ palette2 <- c("#d24ae8","#f0b660")
 root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 
-#housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
-housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
+housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
+#housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
   rename(tookSubsidyNum = y_numeric,
          prevMktgOutcome = poutcome,
          tookSubsidy = y)
@@ -174,7 +175,7 @@ housingsubsidy <-
 Split your data into a 65/35 training/test set.
 
 ```{r Data wrangling}
-set.seed(3456)
+set.seed(5)
 trainIndex <- createDataPartition(housingsubsidy$tookSubsidy, 
                                   y = paste(housingsubsidy$taxLien, housingsubsidy$degreeGroup, housingsubsidy$lastContact),
                                   p = .65,
@@ -190,7 +191,7 @@ housingsubsidyTest  <- housingsubsidy[-trainIndex,]
 #include all to see the coefficients
 reg0 <- glm(tookSubsidyNum ~ .,
                   data=housingsubsidyTrain %>% 
-                    dplyr::select(-X, -tookSubsidy, -industry, -degreeGroup, -employStatus,-contactedBefore), #delete all the NAs?
+                    dplyr::select(-X, -tookSubsidy, -industry, -degreeGroup, -employStatus,-contactedBefore), #delete all the NAs
                   family="binomial" (link="logit"))
 
 summary(reg0)
@@ -250,7 +251,7 @@ head(testProbs)
 ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doesn't look right.. #BC: it's looking normal now but our sensitivity is so low
   geom_density() +
   facet_grid(Outcome ~ .) +
-  scale_fill_manual(values = palette2) + xlim(0, 1) +
+  scale_fill_manual(values = palette2) +
   labs(x = "Accepted Subsidy", y = "Density of probabilities",
        title = "Distribution of predicted probabilities by observed outcome") +
   plotTheme() + theme(strip.text.x = element_text(size = 18),
@@ -317,10 +318,10 @@ cost_benefit_table <-
                 False_Positive = sum(n[predOutcome==1 & Outcome==0])) %>%
        gather(Variable, Count) %>%
        mutate(Revenue =
-               case_when(Variable == "True_Negative"  ~ 0,  #AD: not sure about this section, can you double check? #BC: I think we reaaly need a meeting to discuss this, I think the premium only applies to those who accept the credits
-                         Variable == "True_Positive"  ~ ((10000 - 7850) * (Count * .25)) + (-12850 * (Count * .75)), #AD: we should be using 0.75 - the book uses 0.5 for both because they expect half to churn while we expect 1/4 to accept subsidy
-                         Variable == "False_Negative" ~ (-10000) * Count,
-                         Variable == "False_Positive" ~ (10000-7850)*Count)) %>%
+               case_when(Variable == "True_Negative"  ~ 0,  
+                         Variable == "True_Positive"  ~ ((10000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)), #AD: we should be using 0.75 - the book uses 0.5 for both because they expect half to churn while we expect 1/4 to accept subsidy #BC: YEAH that makes sense! I think I probably made a typo here. For those 75%, I think HCD only lose the allocation money, the housing value remains unchanged since the owner chooses not to take the credits to refine his/her home.
+                         Variable == "False_Negative" ~ (10000-5000) * Count,
+                         Variable == "False_Positive" ~ (-2850)*Count)) %>%
     bind_cols(data.frame(Description = c(
               "Predicted correctly homeowner would not take the credit, no marketing resources were allocated, and no credit was allocated.",
               "Predicted correctly homeowner would take the credit; allocated the marketing resources, and 25% took the credit.",
@@ -337,8 +338,6 @@ kable(cost_benefit_table) %>%
 3.Plot the confusion metric outcomes for each Threshold.
 
 ```{r Plot the confusion metric}
-
-
 #test thresholds
 #iterateThresholds <- function(data, observedClass, predictedProbs, group) {
  # observedClass <- enquo(observedClass)
@@ -401,6 +400,10 @@ kable(cost_benefit_table) %>%
 #  }
 #}
 
+```
+
+
+```{r Plot the confusion metric}
 iterateThresholds <- function(data) {
   x = .01
   all_prediction <- data.frame()
@@ -417,8 +420,8 @@ iterateThresholds <- function(data) {
      gather(Variable, Count) %>%
      mutate(Revenue =
                ifelse(Variable == "True_Negative", Count * 0,
-               ifelse(Variable == "True_Positive",((10000 - 7850) * Count),
-               ifelse(Variable == "False_Negative", (-10000) * Count,
+               ifelse(Variable == "True_Positive",((10000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)),
+               ifelse(Variable == "False_Negative", (10000-5000) * Count,
                ifelse(Variable == "False_Positive", (-2850) * Count, 0)))), #AD: because didn't send marketing material
             Threshold = x)
   
@@ -435,24 +438,6 @@ whichThreshold %>%
     group_by(Threshold) %>% 
     summarize(Revenue = sum(Revenue))
 
-
-
-#whichThreshold <- 
-#  iterateThresholds(
-#     data=testProbs, observedClass = Outcome, predictedProbs = Probs)
-
-
-#calculate revenue at each threshold    #AD: I think the problem is here
-#whichThreshold <- 
- # whichThreshold %>%
- #   dplyr::select(starts_with("Count"), Threshold) %>%
-#    gather(Variable, Count, -Threshold) %>%
-#    mutate(Revenue =
-#                case_when(Variable == "Count_TN"  ~ 0,
-#                           Variable == "Count_TP"  ~ ((10000 - 7850) * (Count * .25)) + (-12850 * #(Count * .75)),
-#                           Variable == "Count_FN"  ~ (-10000) * Count,
-#                           Variable == "Count_FP"  ~ (10000-7850)*Count))
-
 #plot
 whichThreshold %>%
   ggplot(.,aes(Threshold, Revenue, colour = Variable)) +
@@ -465,13 +450,15 @@ whichThreshold %>%
 
 whichThreshold_revenue <- 
   whichThreshold %>% 
-    mutate(actualNonreply = ifelse(Variable == "Count_TP", (Count * .75),
-                         ifelse(Variable == "Count_FN", Count, 0))) %>% 
+    mutate(actualcreditno = ifelse(Variable == "True_Positive", (Count * .75), ifelse(Variable == "False_Positive", Count, 0)),
+           actualcredityes = ifelse(Variable == "True_Positive", (Count * .25), ifelse(Variable == "False_Negative", Count, 0))) %>%  #0 OUT FN here
     group_by(Threshold) %>% 
     summarize(Revenue = sum(Revenue),
-              Actual_Nonreply_Rate = sum(actualNonreply) / sum(Count),
-              Actual_Nonreply_Revenue_Loss =  sum(actualNonreply * 10000),
-              Revenue_Next_Period = Revenue - Actual_Nonreply_Revenue_Loss) 
+              sumcredityes = sum(actualcredityes)*5000,
+              Actual_creditno_Rate = sum(actualcreditno) / sum(Count),
+              Total_credit_counts = sum(Count) - sum(actualcreditno),
+              Actual_creditno_Revenue_Loss =  sum(actualcreditno * 10000),
+              Revenue_Next_Period = Revenue - Actual_creditno_Revenue_Loss) 
 
 
 whichThreshold_revenue[1:5,]
@@ -486,25 +473,34 @@ maxrevenueTest <- whichThreshold_revenue[,1:2] #something is going wrong
 ```{r two small multiple plots}
 
 #AD: what is Total_Count_of_Credits? Is it the number of subsidies that we give out?
-
+p1<-
   ggplot(whichThreshold_revenue)+
   geom_line(aes(x = Threshold, y = Revenue))+
   geom_vline(xintercept =  pull(arrange(whichThreshold_revenue, -Revenue)[1,1]))+
-    labs(title = "Model Revenues By Threshold For Test Sample",
+    labs(title = "Model Total_Revenue By Threshold For Test Sample",
          subtitle = "Vertical Line Denotes Optimal Threshold")
   
   #total_count_of_credits plot
+
+p2<-  ggplot(whichThreshold_revenue)+
+  geom_line(aes(x = Threshold, y = sumcredityes))+
+  geom_vline(xintercept =  pull(arrange(whichThreshold_revenue, -sumcredityes)[1,1]))+
+    labs(title = "Model Total_Count_of_Credits By Threshold For Test Sample",
+         subtitle = "Vertical Line Denotes Optimal Threshold")
+
+ grid.arrange(p1, p2, ncol =1, top = "Threshold as a function of Total_Revenue and Total_Count_of_Credits")
 ```
 
 5.Create a table of the Total_Revenue and Total_Count_of_Credits allocated for 2 categories. 50%_Threshold and your Optimal_Threshold.
 
 ```{r Create a table}
-threshold_table <- whichThreshold_revenue[c(1,50,), c("Threshold", "Revenue", "Revenue_Next_Period")]
+#0.91
+threshold_table <- whichThreshold_revenue[c(50,91), c("Threshold", "Revenue", "sumcredityes")]
 threshold_table %>%
-  group_by(Thresholdn) %>% 
-  kable(caption = "Total_Revenue and Total_Count_of_Credits") %>%
-    kable_styling("striped", full_width = F) 
-#not finishes, need nopredictive data and best threshold data
+  group_by(Threshold) %>%
+  kable(caption = "Total_Revenue and Total_Count_of_Credits", col.names = c("Threshold", "Total revenue", "Total count of credits")) %>%
+    kable_styling("striped", full_width = T) 
+
 ```
 
 ## Conclusions
