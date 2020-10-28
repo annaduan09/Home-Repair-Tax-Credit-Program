@@ -319,8 +319,8 @@ cost_benefit_table <-
        gather(Variable, Count) %>%
        mutate(Revenue =
                case_when(Variable == "True_Negative"  ~ 0,  
-                         Variable == "True_Positive"  ~ ((10000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)), #AD: we should be using 0.75 - the book uses 0.5 for both because they expect half to churn while we expect 1/4 to accept subsidy #BC: YEAH that makes sense! I think I probably made a typo here. For those 75%, I think HCD only lose the allocation money, the housing value remains unchanged since the owner chooses not to take the credits to refine his/her home.
-                         Variable == "False_Negative" ~ (10000-5000) * Count,
+                         Variable == "True_Positive"  ~ ((66000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)), 
+                         Variable == "False_Negative" ~ 0 * Count,
                          Variable == "False_Positive" ~ (-2850)*Count)) %>%
     bind_cols(data.frame(Description = c(
               "Predicted correctly homeowner would not take the credit, no marketing resources were allocated, and no credit was allocated.",
@@ -420,8 +420,8 @@ iterateThresholds <- function(data) {
      gather(Variable, Count) %>%
      mutate(Revenue =
                ifelse(Variable == "True_Negative", Count * 0,
-               ifelse(Variable == "True_Positive",((10000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)),
-               ifelse(Variable == "False_Negative", (10000-5000) * Count,
+               ifelse(Variable == "True_Positive",((66000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)),
+               ifelse(Variable == "False_Negative", 0 * Count,
                ifelse(Variable == "False_Positive", (-2850) * Count, 0)))), #AD: because didn't send marketing material
             Threshold = x)
   
@@ -451,14 +451,14 @@ whichThreshold %>%
 whichThreshold_revenue <- 
   whichThreshold %>% 
     mutate(actualcreditno = ifelse(Variable == "True_Positive", (Count * .75), ifelse(Variable == "False_Positive", Count, 0)),
-           actualcredityes = ifelse(Variable == "True_Positive", (Count * .25), ifelse(Variable == "False_Negative", Count, 0))) %>%  #0 OUT FN here
+           actualcredityes = ifelse(Variable == "True_Positive", (Count * .25), ifelse(Variable == "False_Negative", Count, 0))) %>%  
     group_by(Threshold) %>% 
     summarize(Revenue = sum(Revenue),
-              sumcredityes = sum(actualcredityes)*5000,
-              Actual_creditno_Rate = sum(actualcreditno) / sum(Count),
-              Total_credit_counts = sum(Count) - sum(actualcreditno),
-              Actual_creditno_Revenue_Loss =  sum(actualcreditno * 10000),
-              Revenue_Next_Period = Revenue - Actual_creditno_Revenue_Loss) 
+              sumcredityes = sum(actualcredityes))
+             # Actual_creditno_Rate = sum(actualcreditno) / sum(Count),
+             # Total_credit_counts = sum(Count) - sum(actualcreditno),
+             # Actual_creditno_Revenue_Loss =  sum(actualcreditno * 10000),
+             # Revenue_Next_Period = Revenue - Actual_creditno_Revenue_Loss) 
 
 
 whichThreshold_revenue[1:5,]
@@ -495,7 +495,7 @@ p2<-  ggplot(whichThreshold_revenue)+
 
 ```{r Create a table}
 #0.91
-threshold_table <- whichThreshold_revenue[c(50,91), c("Threshold", "Revenue", "sumcredityes")]
+threshold_table <- whichThreshold_revenue[c(16, 50), c("Threshold", "Revenue", "sumcredityes")]
 threshold_table %>%
   group_by(Threshold) %>%
   kable(caption = "Total_Revenue and Total_Count_of_Credits", col.names = c("Threshold", "Total revenue", "Total count of credits")) %>%
