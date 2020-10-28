@@ -44,8 +44,8 @@ palette2 <- c("#d24ae8","#f0b660")
 root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 
-housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
-#housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
+#housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
+housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
   rename(tookSubsidyNum = y_numeric,
          prevMktgOutcome = poutcome,
          tookSubsidy = y)
@@ -114,7 +114,8 @@ housingsubsidy %>%
     scale_fill_manual(values = palette2) +
     labs(title = "Feature distributions subsidy vs. no subsidy",
          subtitle = "(continous outcomes)", x = "Value", y = "Density") +
-    theme(legend.position = "none")
+    theme(legend.position = "none") +
+  plotTheme()
 
 
 ```
@@ -133,6 +134,14 @@ Engineer new features that significantly increase the Sensitivity.
 
 ```{r Add new features}
 ##age groups ##employ or not ##high school and bachelor's or not
+
+#ageTest <- housingsubsidy %>%
+ # filter(tookSubsidy == "yes")
+
+#  qplot(ageTest$lastContact, geom="histogram") +
+ #   stat_bin(bins = 20)
+
+
 housingsubsidy <- 
   housingsubsidy %>% 
   mutate(employStatus = case_when(job == "unemployed"  ~ "unemployed",
@@ -199,13 +208,14 @@ pR2(reg1)
 #with engineered features
 reg2 <- glm(tookSubsidyNum ~ .,
                   data=housingsubsidyTrain %>% 
-                    dplyr::select(-age, -job, -education, -pdays, -previous, -X, -tookSubsidy),
+                    dplyr::select(-age, -job, -education, -pdays, -previous, -X, -tookSubsidy, -taxLien),
                   family="binomial" (link="logit"))
 
 summary(reg2)
 pR2(reg2)
 
 #BC: we need to exclude X and tookSubsidy here to avoid overfitting
+#AD: I see! THat's smart, I didn't think of that
 
 #with variables that explain the most based on reg1 and reg2
 reg3 <- glm(tookSubsidyNum ~ .,
@@ -216,12 +226,21 @@ reg3 <- glm(tookSubsidyNum ~ .,
 summary(reg3)
 pR2(reg3)
 
+#with variables based on exp() of coefficients
+reg4 <- glm(tookSubsidyNum ~ .,
+                  data=housingsubsidyTrain %>% 
+                    dplyr::select(tookSubsidyNum, marital, month, prevMktgOutcome, unemploy_rate, cons.price.idx, employStatus, ageGroup, degreeGroup, industry, lastContact, mortgage),
+                  family="binomial" (link="logit"))
+
+summary(reg4)
+pR2(reg4)
+
 ```
 
 
 ```{r goodness of fit}
 testProbs <- data.frame(Outcome = as.factor(housingsubsidyTest$tookSubsidyNum),
-                        Probs = predict(reg0, housingsubsidyTest, type= "response"))
+                        Probs = predict(reg3, housingsubsidyTest, type= "response"))
 testProbs <- 
   testProbs %>%
   mutate(predOutcome  = as.factor(ifelse(testProbs$Probs > 0.5 , 1, 0))) #change from 0.5 to raise sensitivity 
@@ -237,6 +256,7 @@ ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doe
   plotTheme() + theme(strip.text.x = element_text(size = 18),
         legend.position = "none")
 
+
 #confusion matrix
 caret::confusionMatrix(testProbs$predOutcome, testProbs$Outcome, 
                        positive = "1")
@@ -246,11 +266,11 @@ caret::confusionMatrix(testProbs$predOutcome, testProbs$Outcome,
 ## Interpret the ROC curve
 Output an ROC curve for your new model and interpret it.
 ```{r ROC curve , echo=FALSE}
-ggplot(testProbs, aes(d = as.numeric(testProbs$Outcome), m = Probs)) +
+ggplot(testProbs, aes(d = as.numeric(Outcome), m = Probs)) +
   geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +  #BC: not sure if we need to change 50 here too
   style_roc(theme = theme_grey) +
   geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
-  labs(title = "ROC Curve - reg0")
+  labs(title = "ROC Curve - reg3")
 
 #area under curve 
 pROC::auc(testProbs$Outcome, testProbs$Probs) 
@@ -298,9 +318,9 @@ cost_benefit_table <-
        gather(Variable, Count) %>%
        mutate(Revenue =
                case_when(Variable == "True_Negative"  ~ 0,  #AD: not sure about this section, can you double check? #BC: I think we reaaly need a meeting to discuss this, I think the premium only applies to those who accept the credits
-                         Variable == "True_Positive"  ~ 0.25*Count*(56000+10000)-(Count*2850+0.25*Count*5000),
-                         Variable == "False_Negative" ~ Count*(56000+10000)-(5000 * Count),
-                         Variable == "False_Positive" ~ (-2850)*Count)) %>%
+                         Variable == "True_Positive"  ~ ((10000 - 7850) * (Count * .25)) + (-12850 * (Count * .75)), #AD: we should be using 0.75 - the book uses 0.5 for both because they expect half to churn while we expect 1/4 to accept subsidy
+                         Variable == "False_Negative" ~ (-10000) * Count,
+                         Variable == "False_Positive" ~ (10000-7850)*Count)) %>%
     bind_cols(data.frame(Description = c(
               "Predicted correctly homeowner would not take the credit, no marketing resources were allocated, and no credit was allocated.",
               "Predicted correctly homeowner would take the credit; allocated the marketing resources, and 25% took the credit.",
@@ -317,84 +337,122 @@ kable(cost_benefit_table) %>%
 3.Plot the confusion metric outcomes for each Threshold.
 
 ```{r Plot the confusion metric}
+
+
 #test thresholds
-iterateThresholds <- function(data, observedClass, predictedProbs, group) {
-  observedClass <- enquo(observedClass)
-  predictedProbs <- enquo(predictedProbs)
-  group <- enquo(group)
+#iterateThresholds <- function(data, observedClass, predictedProbs, group) {
+ # observedClass <- enquo(observedClass)
+ # predictedProbs <- enquo(predictedProbs)
+#  group <- enquo(group)
+#  x = .01
+#  all_prediction <- data.frame()
+#  
+#  if (missing(group)) {
+#  
+#    while (x <= 1) {
+#    this_prediction <- data.frame()
+#    
+#    this_prediction <-
+#      data %>%
+#      mutate(predclass = ifelse(!!predictedProbs > x, 1,0)) %>%
+#      count(predclass, !!observedClass) %>%
+#      summarize(Count_TN = sum(n[predclass==0 & !!observedClass==0]),
+#                Count_TP = sum(n[predclass==1 & !!observedClass==1]),
+#                Count_FN = sum(n[predclass==0 & !!observedClass==1]),
+#                Count_FP = sum(n[predclass==1 & !!observedClass==0]),
+#                Rate_TP = Count_TP / (Count_TP + Count_FN),
+#                Rate_FP = Count_FP / (Count_FP + Count_TN),
+#                Rate_FN = Count_FN / (Count_FN + Count_TP),
+#                Rate_TN = Count_TN / (Count_TN + Count_FP),
+#                Accuracy = (Count_TP + Count_TN) / 
+#                           (Count_TP + Count_TN + Count_FN + Count_FP)) %>%
+#      mutate(Threshold = round(x,2))
+    
+#    all_prediction <- rbind(all_prediction,this_prediction)
+#    x <- x + .01
+#  }
+#  return(all_prediction)
+#  }
+#  else if (!missing(group)) { 
+#   while (x <= 1) {
+#   this_prediction <- data.frame()
+#    
+#    this_prediction <-
+#      data %>%
+#      mutate(predclass = ifelse(!!predictedProbs > x, 1,0)) %>%
+#      group_by(!!group) %>%
+#      count(predclass, !!observedClass) %>%
+#      summarize(Count_TN = sum(n[predclass==0 & !!observedClass==0]),
+#                Count_TP = sum(n[predclass==1 & !!observedClass==1]),
+#                Count_FN = sum(n[predclass==0 & !!observedClass==1]),
+#                Count_FP = sum(n[predclass==1 & !!observedClass==0]),
+#                Rate_TP = Count_TP / (Count_TP + Count_FN),
+#                Rate_FP = Count_FP / (Count_FP + Count_TN),
+#                Rate_FN = Count_FN / (Count_FN + Count_TP),
+#                Rate_TN = Count_TN / (Count_TN + Count_FP),
+#                Accuracy = (Count_TP + Count_TN) / 
+#                           (Count_TP + Count_TN + Count_FN + Count_FP)) %>%
+#      mutate(Threshold = round(x,2))
+#    
+#    all_prediction <- rbind(all_prediction,this_prediction)
+#    x <- x + .01
+#  }
+#  return(all_prediction)
+#  }
+#}
+
+iterateThresholds <- function(data) {
   x = .01
   all_prediction <- data.frame()
+  while (x <= 1) {
   
-  if (missing(group)) {
+  this_prediction <-
+      testProbs %>%
+      mutate(predOutcome = ifelse(Probs > x, 1, 0)) %>%
+      count(predOutcome, Outcome) %>%
+      summarize(True_Negative = sum(n[predOutcome==0 & Outcome==0]),
+                True_Positive = sum(n[predOutcome==1 & Outcome==1]),
+                False_Negative = sum(n[predOutcome==0 & Outcome==1]),
+                False_Positive = sum(n[predOutcome==1 & Outcome==0])) %>%
+     gather(Variable, Count) %>%
+     mutate(Revenue =
+               ifelse(Variable == "True_Negative", Count * 0,
+               ifelse(Variable == "True_Positive",((10000 - 7850) * Count),
+               ifelse(Variable == "False_Negative", (-10000) * Count,
+               ifelse(Variable == "False_Positive", (-2850) * Count, 0)))), #AD: because didn't send marketing material
+            Threshold = x)
   
-    while (x <= 1) {
-    this_prediction <- data.frame()
-    
-    this_prediction <-
-      data %>%
-      mutate(predclass = ifelse(!!predictedProbs > x, 1,0)) %>%
-      count(predclass, !!observedClass) %>%
-      summarize(Count_TN = sum(n[predclass==0 & !!observedClass==0]),
-                Count_TP = sum(n[predclass==1 & !!observedClass==1]),
-                Count_FN = sum(n[predclass==0 & !!observedClass==1]),
-                Count_FP = sum(n[predclass==1 & !!observedClass==0]),
-                Rate_TP = Count_TP / (Count_TP + Count_FN),
-                Rate_FP = Count_FP / (Count_FP + Count_TN),
-                Rate_FN = Count_FN / (Count_FN + Count_TP),
-                Rate_TN = Count_TN / (Count_TN + Count_FP),
-                Accuracy = (Count_TP + Count_TN) / 
-                           (Count_TP + Count_TN + Count_FN + Count_FP)) %>%
-      mutate(Threshold = round(x,2))
-    
-    all_prediction <- rbind(all_prediction,this_prediction)
-    x <- x + .01
+  all_prediction <- rbind(all_prediction, this_prediction)
+  x <- x + .01
   }
-  return(all_prediction)
-  }
-  else if (!missing(group)) { 
-   while (x <= 1) {
-    this_prediction <- data.frame()
-    
-    this_prediction <-
-      data %>%
-      mutate(predclass = ifelse(!!predictedProbs > x, 1,0)) %>%
-      group_by(!!group) %>%
-      count(predclass, !!observedClass) %>%
-      summarize(Count_TN = sum(n[predclass==0 & !!observedClass==0]),
-                Count_TP = sum(n[predclass==1 & !!observedClass==1]),
-                Count_FN = sum(n[predclass==0 & !!observedClass==1]),
-                Count_FP = sum(n[predclass==1 & !!observedClass==0]),
-                Rate_TP = Count_TP / (Count_TP + Count_FN),
-                Rate_FP = Count_FP / (Count_FP + Count_TN),
-                Rate_FN = Count_FN / (Count_FN + Count_TP),
-                Rate_TN = Count_TN / (Count_TN + Count_FP),
-                Accuracy = (Count_TP + Count_TN) / 
-                           (Count_TP + Count_TN + Count_FN + Count_FP)) %>%
-      mutate(Threshold = round(x,2))
-    
-    all_prediction <- rbind(all_prediction,this_prediction)
-    x <- x + .01
-  }
-  return(all_prediction)
-  }
+return(all_prediction)
 }
 
-whichThreshold <- 
-  iterateThresholds(
-     data=testProbs, observedClass = Outcome, predictedProbs = Probs)
+whichThreshold <- iterateThresholds(testProbs2)
 
-whichThreshold[1:5,]
+whichThreshold_revenue <- 
+whichThreshold %>% 
+    group_by(Threshold) %>% 
+    summarize(Revenue = sum(Revenue))
 
-#calculate revenue at each threshold
-whichThreshold <- 
-  whichThreshold %>%
-    dplyr::select(starts_with("Count"), Threshold) %>%
-    gather(Variable, Count, -Threshold) %>%
-    mutate(Revenue =
-                 case_when(Variable == "Count_TN"  ~ 0,
-                           Variable == "Count_TP"  ~ 0.25*Count*(56000+10000)-(Count*2850+0.25*Count*5000),
-                           Variable == "Count_FN"  ~ Count*(56000+10000)-(5000 * Count),
-                           Variable == "Count_FP"  ~ (-2850)*Count))
+
+
+#whichThreshold <- 
+#  iterateThresholds(
+#     data=testProbs, observedClass = Outcome, predictedProbs = Probs)
+
+
+#calculate revenue at each threshold    #AD: I think the problem is here
+#whichThreshold <- 
+ # whichThreshold %>%
+ #   dplyr::select(starts_with("Count"), Threshold) %>%
+#    gather(Variable, Count, -Threshold) %>%
+#    mutate(Revenue =
+#                case_when(Variable == "Count_TN"  ~ 0,
+#                           Variable == "Count_TP"  ~ ((10000 - 7850) * (Count * .25)) + (-12850 * #(Count * .75)),
+#                           Variable == "Count_FN"  ~ (-10000) * Count,
+#                           Variable == "Count_FP"  ~ (10000-7850)*Count))
+
 #plot
 whichThreshold %>%
   ggplot(.,aes(Threshold, Revenue, colour = Variable)) +
@@ -407,34 +465,35 @@ whichThreshold %>%
 
 whichThreshold_revenue <- 
   whichThreshold %>% 
-    mutate(actualChurn = ifelse(Variable == "Count_TP", (Count * .75),
+    mutate(actualNonreply = ifelse(Variable == "Count_TP", (Count * .75),
                          ifelse(Variable == "Count_FN", Count, 0))) %>% 
     group_by(Threshold) %>% 
     summarize(Revenue = sum(Revenue),
-              Actual_Churn_Rate = sum(actualChurn) / sum(Count),
-              Actual_Churn_Revenue_Loss =  sum(actualChurn * 66000), #NOT SURE
-              Revenue_Next_Period = Revenue - Actual_Churn_Revenue_Loss) 
+              Actual_Nonreply_Rate = sum(actualNonreply) / sum(Count),
+              Actual_Nonreply_Revenue_Loss =  sum(actualNonreply * 10000),
+              Revenue_Next_Period = Revenue - Actual_Nonreply_Revenue_Loss) 
+
 
 whichThreshold_revenue[1:5,]
 
+
 maxrevenueTest <- whichThreshold_revenue[,1:2] #something is going wrong 
+                                                  #AD: looks slightly more accurate now...
 ```
 
 4.Create two small multiple plots that show Threshold as a function of Total_Revenue and Total_Count_of_Credits. Interpret this.
 
 ```{r two small multiple plots}
-#AD: doesn't work yet
-whichThreshold_revenue %>%
-  dplyr::select(Threshold, Revenue, Revenue_Next_Period) %>%
-  gather(Variable, Value, -Threshold) %>%
-  ggplot(aes(Threshold, Value, colour = Variable)) +
-    geom_point() +
-    geom_vline(xintercept = pull(arrange(whichThreshold_revenue, -Revenue)[1,1])) +
-    scale_colour_manual(values = palette2) +
-    plotTheme() + ylim(0,70000) +
-    labs(title = "Revenue this pay period and the next by threshold",
-         subtitle = "Assuming no new customers added next period. Vertical line denotes optimal threshold")
 
+#AD: what is Total_Count_of_Credits? Is it the number of subsidies that we give out?
+
+  ggplot(whichThreshold_revenue)+
+  geom_line(aes(x = Threshold, y = Revenue))+
+  geom_vline(xintercept =  pull(arrange(whichThreshold_revenue, -Revenue)[1,1]))+
+    labs(title = "Model Revenues By Threshold For Test Sample",
+         subtitle = "Vertical Line Denotes Optimal Threshold")
+  
+  #total_count_of_credits plot
 ```
 
 5.Create a table of the Total_Revenue and Total_Count_of_Credits allocated for 2 categories. 50%_Threshold and your Optimal_Threshold.
