@@ -37,8 +37,8 @@ palette2 <- c("#d24ae8","#f0b660")
 root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 
-#housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
-housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
+housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
+#housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
   rename(tookSubsidyNum = y_numeric,
          prevMktgOutcome = poutcome,
          tookSubsidy = y)
@@ -188,7 +188,7 @@ reg0 <- glm(tookSubsidyNum ~ .,
 summary(reg0)
 pR2(reg0)
 
-#without engineered features
+#without engineered features, namely the kitchen sink 
 reg1 <- glm(tookSubsidyNum ~ .,
                   data=housingsubsidyTrain %>% 
                     dplyr::select(-employStatus, -ageGroup, -degreeGroup, -industry, -lastContact, -contactedBefore, -X, -tookSubsidy),
@@ -224,12 +224,13 @@ pR2(reg3)
 
 ```{r goodness of fit, message=FALSE, warning=FALSE, results='hide'}
 
+#ks
+testProbs_ks <- data.frame(Outcome = as.factor(housingsubsidyTest$tookSubsidyNum),
+                        Probs = predict(reg1, housingsubsidyTest, type= "response"))
 
-testProbs <- data.frame(Outcome = as.factor(housingsubsidyTest$tookSubsidyNum),
-                        Probs = predict(reg3, housingsubsidyTest, type= "response"))
 
 
-ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doesn't look right.. #BC: it's looking normal now but our sensitivity is so low
+  ggplot(testProbs_ks, aes(x = Probs, fill = as.factor(Outcome))) + 
   geom_density() +
   facet_grid(Outcome ~ .) +
   scale_fill_manual(values = palette2) +
@@ -239,20 +240,42 @@ ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doe
         legend.position = "none")
 
 
-testProbs <- 
-  testProbs %>%
-  mutate(predOutcome  = as.factor(ifelse(testProbs$Probs > 0.5 , 1, 0))) #change from 0.5 to raise sensitivity 
-
-
+testProbs_ks <- 
+  testProbs_ks %>%
+  mutate(predOutcome  = as.factor(ifelse(testProbs_ks$Probs > 0.5 , 1, 0))) 
 
 #confusion matrix
-caret::confusionMatrix(testProbs$predOutcome, testProbs$Outcome, 
+caret::confusionMatrix(testProbs_ks$predOutcome, testProbs_ks$Outcome, 
+                       positive = "1")
+
+#reg2 engineering features
+testProbs_r2 <- data.frame(Outcome = as.factor(housingsubsidyTest$tookSubsidyNum),
+                        Probs = predict(reg2, housingsubsidyTest, type= "response"))
+
+
+ggplot(testProbs_r2, aes(x = Probs, fill = as.factor(Outcome))) + 
+  geom_density() +
+  facet_grid(Outcome ~ .) +
+  scale_fill_manual(values = palette2) +
+  labs(x = "Accepted Subsidy", y = "Density of probabilities",
+       title = "Distribution of predicted probabilities by observed outcome") +
+  plotTheme() + theme(strip.text.x = element_text(size = 18),
+        legend.position = "none")
+
+
+testProbs_r2 <- 
+  testProbs_r2 %>%
+  mutate(predOutcome  = as.factor(ifelse(testProbs_r2$Probs > 0.5 , 1, 0))) 
+
+#confusion matrix
+caret::confusionMatrix(testProbs_r2$predOutcome, testProbs_r2$Outcome, 
                        positive = "1")
 
 ```
 
 ## Interpret the ROC curve
 5. Output an ROC curve for your new model and interpret it.
+
 ```{r ROC curve , message=FALSE, warning=FALSE, results='hide'}
 ggplot(testProbs, aes(d = as.numeric(Outcome), m = Probs)) +
   geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +  #BC: not sure if we need to change 50 here too
@@ -260,11 +283,7 @@ ggplot(testProbs, aes(d = as.numeric(Outcome), m = Probs)) +
   geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
   labs(title = "ROC Curve - reg3")
 
-#area under curve 
-pROC::auc(testProbs$Outcome, testProbs$Probs) 
-#0.7538
-#we choose point false positive 0.91?
-```
+
 
 ```{r cross validation, message=FALSE, warning=FALSE, results='hide'}
 #4c: Cross validate both models; compare and interpret two facetted plots of ROC, Sensitivity and Specificity.
@@ -272,36 +291,38 @@ pROC::auc(testProbs$Outcome, testProbs$Probs)
 ctrl <- trainControl(method = "cv", number = 100, classProbs=TRUE, summaryFunction=twoClassSummary)
 
 #kitchen sink
-cvFit0 <- train(tookSubsidy ~ ., data = housingsubsidy %>% 
-                                   dplyr::select(-X, -tookSubsidyNum), 
+cvFit1 <- train(tookSubsidy ~ ., data = housingsubsidy %>% 
+                                   dplyr::select(-employStatus, -ageGroup, -degreeGroup, -industry, -lastContact, -contactedBefore, -X, -tookSubsidyNum), 
                 method="glm", family="binomial",
                 metric="ROC", trControl = ctrl)
 
-cvFit0
+cvFit1
 
 #selected features
-cvFit3 <- train(tookSubsidy ~ ., data = housingsubsidy %>% 
-                                   dplyr::select(-X, -tookSubsidyNum, -industry, -degreeGroup, -employStatus,-contactedBefore, -taxLien), 
+cvFit2 <- train(tookSubsidy ~ ., data = housingsubsidy %>% 
+                                   dplyr::select(-age, -job, -education, -pdays, -previous, -X, -taxLien, -tookSubsidyNum), 
                 method="glm", family="binomial",
                 metric="ROC", trControl = ctrl)
 
-cvFit3
+cvFit2
 
 #kitchen sink
-dplyr::select(cvFit0$resample, -Resample) %>%
+f1<-
+dplyr::select(cvFit1$resample, -Resample) %>%
   gather(metric, value) %>%
-  left_join(gather(cvFit0$results[2:4], metric, mean)) %>%
+  left_join(gather(cvFit1$results[2:4], metric, mean)) %>%
   ggplot(aes(value)) + 
     geom_histogram(bins=35, fill = "#FF006A") +
     facet_wrap(~metric) +
     geom_vline(aes(xintercept = mean), colour = "#981FAC", linetype = 3, size = 1.5) +
     scale_x_continuous(limits = c(0, 1)) +
     labs(x="Kitchen Sink Model Goodness of Fit", y="Count", title="CV Goodness of Fit Metrics",
-         subtitle = "Across-fold mean reprented as dotted lines") +
+         subtitle = "Across-fold mean reprented as dotted lines kitchen sink") +
     plotTheme()
 
 #selected model
-dplyr::select(cvFit3$resample, -Resample) %>%
+f2<-
+dplyr::select(cvFit2$resample, -Resample) %>%
   gather(metric, value) %>%
   left_join(gather(cvFit3$results[2:4], metric, mean)) %>%
   ggplot(aes(value)) + 
@@ -310,8 +331,26 @@ dplyr::select(cvFit3$resample, -Resample) %>%
     geom_vline(aes(xintercept = mean), colour = "#981FAC", linetype = 3, size = 1.5) +
     scale_x_continuous(limits = c(0, 1)) +
     labs(x="Selected Model Goodness of Fit", y="Count", title="CV Goodness of Fit Metrics",
-         subtitle = "Across-fold mean reprented as dotted lines") +
+         subtitle = "Across-fold mean reprented as dotted lines new features model") +
     plotTheme()
+
+
+grid.arrange(f1, f2, ncol =1, top = "ROC, Sensivity and specificity of two models")
+```
+
+```{r ROC curve , echo=FALSE}
+
+#r2
+
+ggplot(testProbs_r2, aes(d = as.numeric(Outcome), m = Probs)) +
+  geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") + 
+  style_roc(theme = theme_grey) +
+  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +
+  labs(title = "ROC Curve - features model")
+
+#area under curve 
+pROC::auc(testProbs_r2$Outcome, testProbs_r2$Probs) 
+
 
 ```
 
@@ -358,7 +397,9 @@ kable(cost_benefit_table) %>%
 
 6c Plot the confusion metric outcomes for each Threshold.
 
+
 ```{r Plot the confusion metric, message=FALSE, warning=FALSE, results='hide'}
+
 iterateThresholds <- function(data) {
   x = .01
   all_prediction <- data.frame()
@@ -410,11 +451,6 @@ whichThreshold_revenue <-
     group_by(Threshold) %>% 
     summarize(Revenue = sum(Revenue),
               sumcredityes = sum(actualcredityes))
-             # Actual_creditno_Rate = sum(actualcreditno) / sum(Count),
-             # Total_credit_counts = sum(Count) - sum(actualcreditno),
-             # Actual_creditno_Revenue_Loss =  sum(actualcreditno * 10000),
-             # Revenue_Next_Period = Revenue - Actual_creditno_Revenue_Loss) 
-
 
 whichThreshold_revenue[1:5,]
 
@@ -427,15 +463,12 @@ maxrevenueTest <- whichThreshold_revenue[,1:2] #something is going wrong
 
 ```{r two small multiple plots, message=FALSE, warning=FALSE, results='hide'}
 
-#AD: what is Total_Count_of_Credits? Is it the number of subsidies that we give out?
 p1<-
   ggplot(whichThreshold_revenue)+
   geom_line(aes(x = Threshold, y = Revenue))+
   geom_vline(xintercept =  pull(arrange(whichThreshold_revenue, -Revenue)[1,1]))+
     labs(title = "Model Total_Revenue By Threshold For Test Sample",
          subtitle = "Vertical Line Denotes Optimal Threshold")
-  
-  #total_count_of_credits plot
 
 p2<-  ggplot(whichThreshold_revenue)+
   geom_line(aes(x = Threshold, y = sumcredityes))+
