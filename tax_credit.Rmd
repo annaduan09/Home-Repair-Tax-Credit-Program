@@ -8,15 +8,6 @@ output:
     toc_float: true
     code_folding: hide
 ---
-## Questions
-If we predict that a household will take the credit, then HCD is willing to allocate $2,850 per homeowner which includes staff and resources to facilitate mailers, phone calls, and information/counseling sessions at the HCD offices. Given the new targeting algorithm, we should now assume 25% of contacted eligible homeowners take the credit. The remainder receive the marketing allocation but do not take the credit.
-
-The credit costs $5,000 per homeowner which can be used toward home improvement. Academic researchers in Philadelphia evaluated the program finding that houses that transacted after taking the credit, sold with a $10,000 premium, on average. Homes surrounding the repaired home see an aggregate premium of $56,000, on average. Below is a run down of the costs and benefits for each potential outcome of the model you will build.
-
-True Positive - Predicted correctly homeowner would take the credit; allocated the marketing resources, and 25% took the credit.
-True Negative - Predicted correctly homeowner would not take the credit, no marketing resources were allocated, and no credit was allocated.
-False Positive - Predicted incorrectly homeowner would take the credit; allocated marketing resources; no credit allocated.
-False Negative - We predicted that a homeowner would not take the credit but they did. These are likely homeowners who signed up for reasons unrelated to the marketing campaign. Thus, we '0 out' this category, assuming the cost/benefit of this is $0.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
@@ -45,8 +36,8 @@ palette2 <- c("#d24ae8","#f0b660")
 root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
 
-housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
-#housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
+#housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>%
+housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Credit-Program/housingSubsidy.csv") %>% 
   rename(tookSubsidyNum = y_numeric,
          prevMktgOutcome = poutcome,
          tookSubsidy = y)
@@ -54,10 +45,10 @@ housingsubsidy <- read.csv("E:/Upenn/CPLN508/tax_credits/Home-Repair-Tax-Credit-
 ```
 
 ## Motivation
-One paragraph on the motivation for the analysis.
+1. One paragraph on the motivation for the analysis.
 
 ## Data visualizations
-Develop and interpret data visualizations that describe feature importance/correlation.
+2. Develop and interpret data visualizations that describe feature importance/correlation.
 
 ```{r Data visualizations, message = FALSE, warning = FALSE}
 #Continuous variables
@@ -125,23 +116,15 @@ housingsubsidy %>%
 ## Data wrangling
 
 ## Add new features
-Engineer new features that significantly increase the Sensitivity.
+4. Engineer new features that significantly increase the Sensitivity.
 
-1.Interpret your new features in one paragraph.
+a.Interpret your new features in one paragraph.
 
-2.Show a regression summary for both the kitchen sink and your engineered regression. #what is a kitchen sink here? AD: I think it's just an expression meaning everything/random assortment of features
+b.Show a regression summary for both the kitchen sink and your engineered regression. 
 
-3.Cross validate both models; compare and interpret two facetted plots of ROC, Sensitivity and Specificity.
+c.Cross validate both models; compare and interpret two facetted plots of ROC, Sensitivity and Specificity.
 
 ```{r Add new features}
-##age groups ##employ or not ##high school and bachelor's or not
-
-#ageTest <- housingsubsidy %>%
- # filter(tookSubsidy == "yes")
-
-#  qplot(ageTest$lastContact, geom="histogram") +
- #   stat_bin(bins = 20)
-
 
 housingsubsidy <- 
   housingsubsidy %>% 
@@ -172,7 +155,7 @@ housingsubsidy <-
 ```
 
 
-Split your data into a 65/35 training/test set.
+3. Split your data into a 65/35 training/test set.
 
 ```{r Data wrangling}
 set.seed(5)
@@ -186,12 +169,12 @@ housingsubsidyTest  <- housingsubsidy[-trainIndex,]
 ```
 
 
-
+4b: Show a regression summary for both the kitchen sink and your engineered regression.
 ```{r regression}
 #include all to see the coefficients
 reg0 <- glm(tookSubsidyNum ~ .,
                   data=housingsubsidyTrain %>% 
-                    dplyr::select(-X, -tookSubsidy, -industry, -degreeGroup, -employStatus,-contactedBefore), #delete all the NAs
+                    dplyr::select(-X, -tookSubsidy), #delete all the NAs
                   family="binomial" (link="logit"))
 
 summary(reg0)
@@ -227,26 +210,16 @@ reg3 <- glm(tookSubsidyNum ~ .,
 summary(reg3)
 pR2(reg3)
 
-#with variables based on exp() of coefficients
-reg4 <- glm(tookSubsidyNum ~ .,
-                  data=housingsubsidyTrain %>% 
-                    dplyr::select(tookSubsidyNum, marital, month, prevMktgOutcome, unemploy_rate, cons.price.idx, employStatus, ageGroup, degreeGroup, industry, lastContact, mortgage),
-                  family="binomial" (link="logit"))
-
-summary(reg4)
-pR2(reg4)
 
 ```
 
 
 ```{r goodness of fit}
+
+
 testProbs <- data.frame(Outcome = as.factor(housingsubsidyTest$tookSubsidyNum),
                         Probs = predict(reg3, housingsubsidyTest, type= "response"))
-testProbs <- 
-  testProbs %>%
-  mutate(predOutcome  = as.factor(ifelse(testProbs$Probs > 0.5 , 1, 0))) #change from 0.5 to raise sensitivity 
 
-head(testProbs)
 
 ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doesn't look right.. #BC: it's looking normal now but our sensitivity is so low
   geom_density() +
@@ -258,6 +231,12 @@ ggplot(testProbs, aes(x = Probs, fill = as.factor(Outcome))) +     #AD: This doe
         legend.position = "none")
 
 
+testProbs <- 
+  testProbs %>%
+  mutate(predOutcome  = as.factor(ifelse(testProbs$Probs > 0.5 , 1, 0))) #change from 0.5 to raise sensitivity 
+
+
+
 #confusion matrix
 caret::confusionMatrix(testProbs$predOutcome, testProbs$Outcome, 
                        positive = "1")
@@ -265,7 +244,7 @@ caret::confusionMatrix(testProbs$predOutcome, testProbs$Outcome,
 ```
 
 ## Interpret the ROC curve
-Output an ROC curve for your new model and interpret it.
+5. Output an ROC curve for your new model and interpret it.
 ```{r ROC curve , echo=FALSE}
 ggplot(testProbs, aes(d = as.numeric(Outcome), m = Probs)) +
   geom_roc(n.cuts = 50, labels = FALSE, colour = "#FE9900") +  #BC: not sure if we need to change 50 here too
@@ -280,15 +259,28 @@ pROC::auc(testProbs$Outcome, testProbs$Probs)
 ```
 
 ```{r cross validation}
+#4c: Cross validate both models; compare and interpret two facetted plots of ROC, Sensitivity and Specificity.
+
 ctrl <- trainControl(method = "cv", number = 100, classProbs=TRUE, summaryFunction=twoClassSummary)
 
-cvFit <- train(tookSubsidy ~ ., data = housingsubsidy %>% 
-                                   dplyr::select(
-                                   -tookSubsidyNum), 
+#kitchen sink
+cvFit0 <- train(tookSubsidy ~ ., data = housingsubsidy %>% 
+                                   dplyr::select(-X, -tookSubsidyNum), 
                 method="glm", family="binomial",
                 metric="ROC", trControl = ctrl)
 
-dplyr::select(cvFit$resample, -Resample) %>%
+cvFit0
+
+#selected features
+cvFit3 <- train(tookSubsidy ~ ., data = housingsubsidy %>% 
+                                   dplyr::select(-X, -tookSubsidyNum, -industry, -degreeGroup, -employStatus,-contactedBefore, -taxLien), 
+                method="glm", family="binomial",
+                metric="ROC", trControl = ctrl)
+
+cvFit3
+
+#kitchen sink
+dplyr::select(cvFit0$resample, -Resample) %>%
   gather(metric, value) %>%
   left_join(gather(cvFit$results[2:4], metric, mean)) %>%
   ggplot(aes(value)) + 
@@ -296,18 +288,39 @@ dplyr::select(cvFit$resample, -Resample) %>%
     facet_wrap(~metric) +
     geom_vline(aes(xintercept = mean), colour = "#981FAC", linetype = 3, size = 1.5) +
     scale_x_continuous(limits = c(0, 1)) +
-    labs(x="Goodness of Fit", y="Count", title="CV Goodness of Fit Metrics",
+    labs(x="Kitchen Sink Model Goodness of Fit", y="Count", title="CV Goodness of Fit Metrics",
          subtitle = "Across-fold mean reprented as dotted lines") +
     plotTheme()
+
+#selected model
+dplyr::select(cvFit3$resample, -Resample) %>%
+  gather(metric, value) %>%
+  left_join(gather(cvFit$results[2:4], metric, mean)) %>%
+  ggplot(aes(value)) + 
+    geom_histogram(bins=35, fill = "#FF006A") +
+    facet_wrap(~metric) +
+    geom_vline(aes(xintercept = mean), colour = "#981FAC", linetype = 3, size = 1.5) +
+    scale_x_continuous(limits = c(0, 1)) +
+    labs(x="Selected Model Goodness of Fit", y="Count", title="CV Goodness of Fit Metrics",
+         subtitle = "Across-fold mean reprented as dotted lines") +
+    plotTheme()
+
 ```
 
 ## Cost benefit analysis
-1.Write out the cost/benefit equation for each confusion metric.
-2.Create the 'Cost/Benefit Table' as seen above.
+6a.Write out the cost/benefit equation for each confusion metric.
+6b Create the 'Cost/Benefit Table' as seen above.
 
 If we predict that a household will take the credit, then HCD is willing to allocate $2,850 per homeowner which includes staff and resources to facilitate mailers, phone calls, and information/counseling sessions at the HCD offices. Given the new targeting algorithm, we should now assume 25% of contacted eligible homeowners take the credit. The remainder receive the marketing allocation but do not take the credit.
 
-The credit costs $5,000 per homeowner which can be used toward home improvement. Academic researchers in Philadelphia evaluated the program finding that houses that transacted after taking the credit, sold with a $10,000 premium, on average. Homes surrounding the repaired home see an aggregate premium of $56,000, on average. Below is a run down of the costs and benefits for each potential outcome of the model you will build.
+The credit costs $5,000 per homeowner which can be used toward home improvement. Academic researchers in Philadelphia evaluated the program finding that houses that transacted after taking the credit, sold with a $10,000 premium, on average. Homes surrounding the repaired home see an aggregate premium of $56,000, on average. 
+
+1. 10000 premium per house that accepts subsidy
+2. 2850 in marketing for each house
+3. 5000 subsidy per house that accepts
+4. 25% of contacted homeowners take subsidy
+
+
 ```{r Cost/Benefit Table}
 cost_benefit_table <-
    testProbs %>%
@@ -319,7 +332,7 @@ cost_benefit_table <-
        gather(Variable, Count) %>%
        mutate(Revenue =
                case_when(Variable == "True_Negative"  ~ 0,  
-                         Variable == "True_Positive"  ~ ((66000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)), 
+                         Variable == "True_Positive"  ~ ((10000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)),   #AD: according to canvas, we can't count the 56000 neighbor premium because we don't know how many neighbors - to only count one neighbor per house is inaccurate
                          Variable == "False_Negative" ~ 0 * Count,
                          Variable == "False_Positive" ~ (-2850)*Count)) %>%
     bind_cols(data.frame(Description = c(
@@ -335,7 +348,7 @@ kable(cost_benefit_table) %>%
            general = "Table XX")
 ```
 
-3.Plot the confusion metric outcomes for each Threshold.
+6c Plot the confusion metric outcomes for each Threshold.
 
 ```{r Plot the confusion metric}
 #test thresholds
@@ -468,7 +481,7 @@ maxrevenueTest <- whichThreshold_revenue[,1:2] #something is going wrong
                                                   #AD: looks slightly more accurate now...
 ```
 
-4.Create two small multiple plots that show Threshold as a function of Total_Revenue and Total_Count_of_Credits. Interpret this.
+6d Create two small multiple plots that show Threshold as a function of Total_Revenue and Total_Count_of_Credits. Interpret this.
 
 ```{r two small multiple plots}
 
@@ -491,7 +504,7 @@ p2<-  ggplot(whichThreshold_revenue)+
  grid.arrange(p1, p2, ncol =1, top = "Threshold as a function of Total_Revenue and Total_Count_of_Credits")
 ```
 
-5.Create a table of the Total_Revenue and Total_Count_of_Credits allocated for 2 categories. 50%_Threshold and your Optimal_Threshold.
+6e Create a table of the Total_Revenue and Total_Count_of_Credits allocated for 2 categories. 50%_Threshold and your Optimal_Threshold.
 
 ```{r Create a table}
 #0.91
@@ -504,4 +517,4 @@ threshold_table %>%
 ```
 
 ## Conclusions
-Conclude whether and why this model should or shouldn't be put into production. What could make the model better? What would you do to ensure that the marketing materials resulted in a better response rate?
+7. Conclude whether and why this model should or shouldn't be put into production. What could make the model better? What would you do to ensure that the marketing materials resulted in a better response rate?
