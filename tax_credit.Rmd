@@ -26,6 +26,7 @@ library(pROC)
 library(lubridate)
 library(viridis)
 library(gridExtra)
+library(forcats)
 ```
 
 ```{r load_data, message=FALSE, warning=FALSE, include=TRUE, results='hide'}
@@ -46,6 +47,13 @@ housingsubsidy <- read.csv("/Users/annaduan/Documents/GitHub/Home-Repair-Tax-Cre
 
 ## Motivation
 1. One paragraph on the motivation for the analysis.
+```{r uptake rate figure, message=FALSE, warning=FALSE, results='hide'}
+
+ggplot(mutate(housingsubsidy, tookSubsidy = fct_infreq(tookSubsidy))) + geom_bar(aes(x = tookSubsidy)) +
+  labs(title = "Figure XX: Results of Prior Campaigns", x = "Repair Credit Uptake Among Contacted Homeowners", y = "Count of Homeowners") +
+  plotTheme()
+```
+
 
 ## Data visualizations
 2. Develop and interpret data visualizations that describe feature importance/correlation.
@@ -282,7 +290,7 @@ cvFit3
 #kitchen sink
 dplyr::select(cvFit0$resample, -Resample) %>%
   gather(metric, value) %>%
-  left_join(gather(cvFit$results[2:4], metric, mean)) %>%
+  left_join(gather(cvFit0$results[2:4], metric, mean)) %>%
   ggplot(aes(value)) + 
     geom_histogram(bins=35, fill = "#FF006A") +
     facet_wrap(~metric) +
@@ -295,7 +303,7 @@ dplyr::select(cvFit0$resample, -Resample) %>%
 #selected model
 dplyr::select(cvFit3$resample, -Resample) %>%
   gather(metric, value) %>%
-  left_join(gather(cvFit$results[2:4], metric, mean)) %>%
+  left_join(gather(cvFit3$results[2:4], metric, mean)) %>%
   ggplot(aes(value)) + 
     geom_histogram(bins=35, fill = "#FF006A") +
     facet_wrap(~metric) +
