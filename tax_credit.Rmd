@@ -158,7 +158,7 @@ housingsubsidy <-
 3. Split your data into a 65/35 training/test set.
 
 ```{r Data wrangling}
-set.seed(5)
+set.seed(10)
 trainIndex <- createDataPartition(housingsubsidy$tookSubsidy, 
                                   y = paste(housingsubsidy$taxLien, housingsubsidy$degreeGroup, housingsubsidy$lastContact),
                                   p = .65,
@@ -433,7 +433,7 @@ iterateThresholds <- function(data) {
      gather(Variable, Count) %>%
      mutate(Revenue =
                ifelse(Variable == "True_Negative", Count * 0,
-               ifelse(Variable == "True_Positive",((66000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)),
+               ifelse(Variable == "True_Positive",((10000 - 7850) * (Count * .25)) + (-2850 * (Count * .75)),
                ifelse(Variable == "False_Negative", 0 * Count,
                ifelse(Variable == "False_Positive", (-2850) * Count, 0)))), #AD: because didn't send marketing material
             Threshold = x)
