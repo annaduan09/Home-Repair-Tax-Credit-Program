@@ -58,7 +58,7 @@ ggplot(mutate(housingsubsidy, tookSubsidy = fct_infreq(tookSubsidy))) + geom_bar
 ## Data visualizations
 2. Develop and interpret data visualizations that describe feature importance/correlation.
 
-```{r Data visualizations, message=FALSE, warning=FALSE, results='hide'}
+```{r Data visualizations, fig.height=10, fig.width=10, message=FALSE, warning=FALSE, results='hide'}
 #Continuous variables
 housingsubsidy %>%
   dplyr::select(tookSubsidy, age, campaign, pdays, previous, spent_on_repairs, unemploy_rate, cons.price.idx, cons.conf.idx, inflation_rate) %>% 
